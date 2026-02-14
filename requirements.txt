@@ -1,0 +1,33 @@
+# UI and Voice Input
+streamlit
+streamlit-mic-recorder
+
+# Core RAG Orchestration
+langchain
+langchain-community
+langchain-openai
+langchain-huggingface
+
+# Vector Database and Embeddings
+sentence-transformers
+faiss-cpu
+
+# LLM and Reranking
+voyageai
+transformers
+accelerate
+
+# PDF Processing
+pypdf
+
+# Voice STT and TTS
+faster-whisper
+gtts
+
+# Evaluation
+ragas
+datasets
+pandas
+
+# Dependencies
+numpy<2.0.0

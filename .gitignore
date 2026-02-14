@@ -1,0 +1,18 @@
+# Virtual Environment
+venv/
+.budgetvenv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Environment variables (API Keys)
+.env
+
+# Project specific
+audio_responses/
+budget_faiss/
+budget_rag_evaluation_report.csv
+
+# Streamlit
+.streamlit/
