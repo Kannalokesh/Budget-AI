@@ -1,4 +1,4 @@
-# ArthaAI: India Budget 2026-27 AI Assistant
+# Budget-AI: Indian Union Budget 2026-27 AI Assistant
 
 An advanced RAG (Retrieval-Augmented Generation) application to chat with the Union Budget 2026-27. Featuring Voice Input/Output, Smart TOC filtering, and Voyage AI Reranking.
 
