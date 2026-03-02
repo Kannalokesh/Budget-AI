@@ -28,7 +28,7 @@ else:
     st.error("VOYAGE_API_KEY not found in environment variables!")
 
 #  PAGE CONFIG 
-st.set_page_config(page_title="India Budget 2026-27", page_icon="🇮🇳", layout="wide")
+st.set_page_config(page_title="ArthaAI", page_icon="🇮🇳", layout="wide")
 
 #  CSS FOR UI FIXES 
 st.markdown("""
@@ -49,7 +49,7 @@ with st.sidebar:
     
     if not api_key: st.error("OPENAI_API_KEY missing!")
 
-st.title("🇮🇳 Budget AI Assistant")
+st.title("🇮🇳 ArthaAI : India Budget 2026-27 AI Assistant")
 
 # 1. UTILITIES
 

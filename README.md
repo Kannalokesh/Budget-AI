@@ -40,8 +40,5 @@ Evaluating using RAGAS Framework
 ## LLM + Retrieval Strategy comparison
 | # | LLM         | Configuration                                   | Faithfulness | Context Recall | Answer Relevancy | Context Precision |
 | - | ----------- | ----------------------------------------------- | ------------ | -------------- | ---------------- | ----------------- |
-| 1 | gpt-4o-mini | Without Reranker                                | **97.20%**   | **100%**       | 90.50%           | 65.40%            |
-| 2 | gpt-5-nano  | With Reranker                                   | 91.67%       | **100%**       | 88.69%           | 87.50%            |
-| 3 | gpt-5-nano  | Smart Filtering + Reranker + Prompt Engineering | 92.50%       | **100%**       | 87.91%           | 90.97%            |
-| 4 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | 91.67%       | **100%**       | **99.09%**       | **95.83%**        |
+| 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | **89.41%**   |    **97.22**   |    **995.75**    |   **95.8%**       |
 

@@ -2,7 +2,6 @@ import os
 import pandas as pd
 from datasets import Dataset
 from ragas import evaluate
-# Updated imports to remove deprecation warnings
 from ragas.metrics import (
     Faithfulness,
     AnswerRelevancy,
@@ -13,89 +12,89 @@ from langchain_openai import ChatOpenAI
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_classic.chains import create_retrieval_chain
 from langchain_core.prompts import ChatPromptTemplate
 import voyageai
+from test_data import test_queries
 
 # 1. SETUP RAG COMPONENTS
 api_key = os.getenv("OPENAI_API_KEY")
 vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
 vectorstore = FAISS.load_local("budget_faiss", embeddings, allow_dangerous_deserialization=True)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+
+retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
 
 # RAG LLM 
 rag_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
 
 # EVALUATOR LLM 
-evaluator_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
+evaluator_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=1)
 
 prompt = ChatPromptTemplate.from_template(
     "Context: {context} \n History: {chat_history} \n Question: {input} \n Answer:"
 )
 document_chain = create_stuff_documents_chain(rag_llm, prompt)
-rag_chain = create_retrieval_chain(retriever, document_chain)
 
-# 2. DEFINE TEST DATASET
-test_queries = [
-    {
-        "question": "What are the seven high-speed rail corridors mentioned as growth connectors?",
-        "ground_truth": "The seven corridors are i) Mumbai-Pune, ii) Pune-Hyderabad, iii) Hyderabad-Bengaluru, iv) Hyderabad-Chennai, v) Chennai-Bengaluru, vi) Delhi-Varanasi, and vii) Varanasi-Siliguri."
-    },
-    {
-        "question": "What are the proposals for AYUSH and Ayurveda institutes?",
-        "ground_truth": "The proposals include: (i) setting up 3 new All India Institutes of Ayurveda; (ii) upgrading AYUSH pharmacies and Drug Testing Labs; and (iii) upgrading the WHO Global Traditional Medicine Centre in Jamnagar."
-    },
-    {
-        "question": "What is the FAST-DS scheme?",
-        "ground_truth": "The Foreign Assets of Small Taxpayers  Disclosure Scheme (FAST - DS), It is proposed to introduce a time-bound scheme for declaration of foreign assets and foreign sourced income for taxpayers involving amounts below certain threshold."
-    },
-    {
-        "question":"What are the three 'kartavyas' that inspired the Budget prepared in Kartavya Bhawan?",
-        "ground_truth":"The three kartavyas are: 1) To accelerate and sustain economic growth by enhancing productivity, competitiveness, and building resilience to global dynamics; 2) To fulfil aspirations of the people and build their capacity as partners in India’s prosperity; and 3) Aligned with Sabka Sath, Sabka Vikas, to ensure every family, community, region, and sector has access to resources, amenities, and opportunities."
-    }
-]
-
-# Reranker on test data
-
+# 2. RUN RAG WITH RERANKER & SMART FILTER
 results = []
-print("Running RAG with Reranker on test queries...")
+print(f"Running RAG on {len(test_queries)} test queries...")
 
-for query in test_queries:
-    # 1. Get 20 docs (Recall)
-    initial_docs = retriever.invoke(query["question"])
+for i, query in enumerate(test_queries):
+    user_q = query["question"]
+    print(f"[{i+1}/{len(test_queries)}] Processing: {user_q[:50]}...")
+
+    # A. Initial Retrieval (Recall Stage)
+    initial_docs = retriever.invoke(user_q)
     
-    # 2. Rerank (Precision)
-    doc_texts = [d.page_content for d in initial_docs]
+    # B. SMART FILTER 
+    meta_keywords = ["contents", "index", "chapters", "overview", "summary", "topics", "outline"]
+    is_meta_query = any(word in user_q.lower() for word in meta_keywords)
+    
+    candidate_docs = []
+    for d in initial_docs:
+        page_num = d.metadata.get("page", 0)
+        content_upper = d.page_content.upper()
+        if not is_meta_query:
+            # Skip TOC noise (first 4 pages or high dot density)
+            if page_num < 4 or "CONTENTS" in content_upper or d.page_content.count("....") > 5:
+                continue 
+        candidate_docs.append(d)
+
+    if not candidate_docs:
+        candidate_docs = initial_docs[:10]
+
+    # C. Rerank (Precision Stage)
+    doc_texts = [d.page_content for d in candidate_docs]
     rerank_results = vo.rerank(
-        query=query["question"],
+        query=user_q,
         documents=doc_texts,
         model="rerank-2.5",
         top_k=4
     )
-    final_docs = [initial_docs[r.index] for r in rerank_results.results]
+    final_docs = [candidate_docs[r.index] for r in rerank_results.results]
     
-    # 3. Generate Answer
+    # D. Generate Answer
     response = document_chain.invoke({
-        "input": query["question"], 
+        "input": user_q, 
         "chat_history": "", 
         "context": final_docs
     })
     
+    # Rename keys to match Ragas expectations (user_input, response, retrieved_contexts, reference)
     results.append({
-        "question": query["question"],
-        "answer": response,
-        "contexts": [doc.page_content for doc in final_docs],
-        "ground_truth": query["ground_truth"]
+        "user_input": user_q,
+        "response": response,
+        "retrieved_contexts": [doc.page_content for doc in final_docs],
+        "reference": query["ground_truth"]
     })
 
-# 4. PREPARE DATASET
+# 3. PREPARE DATASET
 dataset = Dataset.from_list(results)
 
-# 5. PERFORM EVALUATION
-print("Evaluating with Ragas using GPT-5-nano ...")
+# 4. PERFORM EVALUATION
+print("Evaluating with Ragas (Judge: GPT-4o-mini)...")
 
-# Initialize metrics with the LLM
+# Initialize metrics with the LLM and proper formatting
 metrics = [
     Faithfulness(llm=evaluator_llm),
     AnswerRelevancy(llm=evaluator_llm),
@@ -108,20 +107,19 @@ result = evaluate(
     metrics=metrics,
 )
 
-# 6. DISPLAY RESULTS
+# 5. DISPLAY RESULTS
 df = result.to_pandas()
 
 if not df.empty:
-    print("\nRAG Evaluation Report")
-    # In newer Ragas, column names might not have 'question' if not mapped, 
-    # but to_pandas usually includes it.
-    print(df.head())
+    print("\n--- RAG Evaluation Report ---")
+    # Show the specific columns for clarity
+    print(df[['user_input', 'faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']])
     
-    print("\nAverage Scores")
+    print("\n--- Final Average Scores ---")
     print(result)
 
     # Save report
     df.to_csv("budget_rag_evaluation_report.csv", index=False)
-    print("\nResults saved to 'budget_rag_evaluation_report.csv'")
+    print("\nSuccess! Results saved to 'budget_rag_evaluation_report.csv'")
 else:
     print("Evaluation failed to produce results.")
