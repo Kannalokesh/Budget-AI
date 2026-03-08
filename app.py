@@ -210,7 +210,7 @@ if final_query:
                 page_num = d.metadata.get("page", 0)
                 # If factual, filter out TOC pages (0-3) and TOC dots
                 if intent == "FACTUAL":
-                    if page_num < 4 or d.page_content.count("....") > 5:
+                    if page_num < 3 or d.page_content.count("....") > 5:
                         continue 
                 candidate_docs.append(d)
 
