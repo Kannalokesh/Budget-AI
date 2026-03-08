@@ -1,4 +1,4 @@
-# ArthaAI: India Budget 2026-27 AI Assistant
+# BudgetAI: Indian Union Budget 2026-27 AI Assistant
 
 An advanced RAG (Retrieval-Augmented Generation) application to chat with the Union Budget 2026-27. Featuring Voice Input/Output, Intent Classifier, and Voyage AI Reranking.
 
@@ -38,7 +38,7 @@ Evaluating using RAGAS Framework
     python evaluation_report.ipynb
 
 ## LLM + Retrieval Strategy comparison
-| # | LLM         | Configuration                                   | Faithfulness | Context Recall | Answer Relevancy | Context Precision |
-| - | ----------- | ----------------------------------------------- | ------------ | -------------- | ---------------- | ----------------- |
-| 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | **89.41%**   |    **97.22**   |    **95.75**     |  **95.8%**       |
+| # | LLM         | Configuration                                   | Context Precison | Context Recall | Answer Relevancy | Faithfullness |
+| - | ----------- | ----------------------------------------------- | -----------------| -------------- | ---------------- | ----------------- |
+| 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | **95.8%**        |    **97.22**   |    **95.75**     |  **89.41%**       |
 
