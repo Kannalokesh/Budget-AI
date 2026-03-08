@@ -37,7 +37,7 @@ Evaluating using RAGAS Framework
     ```bash
     python evaluation_report.ipynb
 
-## LLM + Retrieval Strategy comparison
+## Performance
 | # | LLM         | Configuration                                   | Context Precison | Context Recall | Answer Relevancy | Faithfullness |
 | - | ----------- | ----------------------------------------------- | -----------------| -------------- | ---------------- | ----------------- |
 | 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering |     **95.8%**    |    **97.22%**  |    **95.75%**    |   **89.41%**       |
