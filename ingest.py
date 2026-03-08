@@ -28,7 +28,7 @@ splitter = RecursiveCharacterTextSplitter(
 chunks = splitter.split_documents(documents)
 print(f"Split into {len(chunks)} text chunks.")
 
-print(f"Writing first 10 chunks to chunks.txt...")
+print("Writing first 10 chunks to chunks.txt...")
 
 with open("chunks.txt", "w", encoding="utf-8") as f:
     for i, chunk in enumerate(chunks[:10]):

@@ -217,7 +217,7 @@ test_queries = [
         "ground_truth": "Established in 2024, India is hosting the first ever Global Big Cat Summit in 2026 with heads of governments from 95 countries."
     },
     {
-        "question": "Name some of the 15 archeological sites proposed for development.",
+        "question": "Name some of the 7 archeological sites proposed for development.",
         "ground_truth": "Lothal, Dholavira, Rakhigarhi, Adichanallur, Sarnath, Hastinapur, and Leh Palace."
     },
     {

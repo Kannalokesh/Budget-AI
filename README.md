@@ -1,12 +1,12 @@
 # ArthaAI: India Budget 2026-27 AI Assistant
 
-An advanced RAG (Retrieval-Augmented Generation) application to chat with the Union Budget 2026-27. Featuring Voice Input/Output, Smart TOC filtering, and Voyage AI Reranking.
+An advanced RAG (Retrieval-Augmented Generation) application to chat with the Union Budget 2026-27. Featuring Voice Input/Output, Intent Classifier, and Voyage AI Reranking.
 
 ## 🚀 Features
 - **Voice & Text:** Chat via typing or speaking (powered by Faster-Whisper & gTTS).
 - **High Precision RAG:** Uses a 2-stage retrieval (FAISS + Voyage AI Reranker).
-- **Smart Filtering:** Automatically ignores Table of Contents for factual queries to improve accuracy.
-- **Evaluation:** Verified using RAGAS framework ( 91% Context Precision, 100% Context Recall, 92.50% Faithfullness, 87.91% Answer Relevancy ).
+- **Smart Filtering:** Using Intent classifier for Structural vs Factual filtering, to ignore Table of Contents for factual queries to improve accuracy.
+- **Evaluation:** Verified using RAGAS framework ( 95.8% Context Precision, 97.2% Context Recall, 89.4% Faithfullness, 95.7% Answer Relevancy ).
 
 
 ## 🛠️ Setup Instructions
@@ -40,5 +40,5 @@ Evaluating using RAGAS Framework
 ## LLM + Retrieval Strategy comparison
 | # | LLM         | Configuration                                   | Faithfulness | Context Recall | Answer Relevancy | Context Precision |
 | - | ----------- | ----------------------------------------------- | ------------ | -------------- | ---------------- | ----------------- |
-| 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | **89.41%**   |    **97.22**   |    **995.75**    |   **95.8%**       |
+| 1 | gpt-4o-mini | Smart Filtering + Reranker + Prompt Engineering | **89.41%**   |    **97.22**   |    **95.75**     |  **95.8%**       |
 

@@ -1,9 +1,9 @@
-import streamlit as st
 import os
 import re
 import uuid
 import tempfile
 import voyageai
+import streamlit as st
 
 # LangChain & OpenAI
 from langchain_openai import ChatOpenAI
@@ -17,20 +17,21 @@ from gtts import gTTS
 from faster_whisper import WhisperModel
 from streamlit_mic_recorder import mic_recorder
 
-#  LOAD ENVIRONMENT VARIABLES 
+# --- LOAD ENVIRONMENT VARIABLES ---
 api_key = os.getenv("OPENAI_API_KEY")
 voyage_key = os.getenv("VOYAGE_API_KEY")
 
-# Initialize Voyage Client
 if voyage_key:
     vo = voyageai.Client(api_key=voyage_key)
 else:
-    st.error("VOYAGE_API_KEY not found in environment variables!")
+    st.error("VOYAGE_API_KEY missing!")
 
-#  PAGE CONFIG 
-st.set_page_config(page_title="ArthaAI", page_icon="🇮🇳", layout="wide")
+LLM_MODEL = "gpt-4o-mini"
 
-#  CSS FOR UI FIXES 
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="BudgetAI", page_icon="🇮🇳", layout="wide")
+
+# --- CSS ---
 st.markdown("""
     <style>
     .block-container { padding-bottom: 1rem; }
@@ -38,24 +39,26 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# SIDEBAR: SESSION MANAGEMENT
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("Session Settings")
-    
+    st.title("Session Controls")
+    if st.button("Clear Chat "):
+        st.session_state.messages = []
+
+    if st.button("Clear Memory"):
+        st.session_state.memory = []
+
     if st.button("Clear Chat & Memory"):
         st.session_state.messages = []
         st.session_state.memory = []
-        st.rerun()
-    
-    if not api_key: st.error("OPENAI_API_KEY missing!")
 
-st.title("🇮🇳 ArthaAI : India Budget 2026-27 AI Assistant")
+st.title("🇮🇳 BudgetAI")
 
-# 1. UTILITIES
+# --- 1. UTILITIES ---
 
 def clean_text_for_speech(text: str) -> str:
-    """Replaces Roman numerals with spoken words for better TTS."""
-    if not text: return ""
+    if not text: 
+        return ""
     replacements = [
         (r'\bi\)', "one."), (r'\bii\)', "two."), (r'\biii\)', "three."),
         (r'\biv\)', "four."), (r'\bv\)', "five."), (r'\bvi\)', "six."),
@@ -66,7 +69,33 @@ def clean_text_for_speech(text: str) -> str:
         clean_text = re.sub(pattern, replacement, clean_text, flags=re.IGNORECASE)
     return clean_text
 
-#  2. LOAD LOCAL MODELS
+# --- 2. INTENT CLASSIFIER ---
+
+def classify_intent(query: str):
+    """Uses LLM to determine if query is asking for structure/overview or specific facts."""
+    if not api_key: 
+        return "FACTUAL"
+    
+    classifier_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
+    
+    prompt = f"""
+    Classify the user query into one of two categories:
+    1. 'STRUCTURAL': User is asking for the Table of Contents, index, list of topics, chapters, or an overview of what is in the document.
+    2. 'FACTUAL': User is asking for specific data, tax rates, scheme details, or allocations.
+
+    Query: "{query}"
+    
+    Return only the word 'STRUCTURAL' or 'FACTUAL'.
+    Category:"""
+    
+    try:
+        response = classifier_llm.invoke(prompt)
+        intent = response.content.strip().upper()
+        return intent if intent in ["STRUCTURAL", "FACTUAL"] else "FACTUAL"
+    except:
+        return "FACTUAL"
+
+# --- 3. LOAD MODELS ---
 
 @st.cache_resource
 def load_local_models():
@@ -77,18 +106,17 @@ def load_local_models():
     except:
         st.error("FAISS Index not found!")
         return None, None
-    
     whisper = WhisperModel("small", device="cpu", compute_type="int8")
     return retriever, whisper
 
 retriever, whisper = load_local_models()
 
-# 3. RAG COMPONENTS
+# --- 4. RAG COMPONENTS ---
 
 def get_rag_components():
-    if not api_key: return None, None
-    # Using gpt-4o-mini or gpt-5-nano for the RAG LLM to balance performance and cost
-    llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
+    if not api_key: 
+        return None, None
+    llm = ChatOpenAI(model=LLM_MODEL, api_key=api_key, temperature=0)
     
     prompt = ChatPromptTemplate.from_template(
         """
@@ -97,11 +125,8 @@ def get_rag_components():
 
         STRICT CONSTRAINTS:
         1. SOURCE ONLY: Use ONLY the provided Context to answer. Never use general knowledge.
-        2. TOPIC PRIORITIZATION: Prioritize dedicated sections for specific topics.
-        3. ACCURACY: If not in Context, state clearly that it is not available.
-        4. STRUCTURE: Use bullet points and bold headers.
-        5. MEMORY: Use the Conversation History to understand context like "it", "previous", "this".
-        6. NO HALLUCINATION: If a fact is not explicitly stated in the context, do not mention it at all.
+        2. ACCURACY: If not in Context, state clearly that it is not available.
+        3. NO HALLUCINATION: If a fact is not explicitly stated, do not mention it at all.
 
         CONVERSATION HISTORY: {chat_history}
         CONTEXT: {context}
@@ -112,7 +137,7 @@ def get_rag_components():
     document_chain = create_stuff_documents_chain(llm, prompt)
     return document_chain, retriever
 
-# 4. SESSION STATE
+# --- 5. SESSION STATE & DISPLAY ---
 
 if "messages" not in st.session_state: st.session_state.messages = []
 if "memory" not in st.session_state: st.session_state.memory = []
@@ -123,7 +148,6 @@ def get_formatted_history():
         history_text += f"User: {user_msg}\nAssistant: {ai_msg}\n"
     return history_text
 
-# Display Chat History Loop
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
@@ -132,135 +156,95 @@ for message in st.session_state.messages:
             with st.expander("📚 View Budget Source Chunks"):
                 for i, doc in enumerate(message["sources"]):
                     page_num = doc.metadata.get("page", "N/A")
-                    st.markdown(f"**Chunk {i+1} (Page {page_num + 1 if isinstance(page_num, int) else page_num}):**")
+                    st.markdown(f"**Chunk {i+1} (Page {page_num + 1}):**")
                     st.caption(doc.page_content)
                     st.divider()
 
-# 5. INPUT HANDLING
+# --- 6. INPUT HANDLING ---
 
 final_query = None
 
-if not api_key or not voyage_key:
-    st.error("API Keys missing. Check environment variables.")
-else:
+if api_key and voyage_key:
     st.write("---")
     col1, col2 = st.columns([1, 8])
     with col1:
-        audio_data = mic_recorder(
-            start_prompt="🎙️ Speak", 
-            stop_prompt="🛑 Stop", 
-            just_once=True, 
-            key='recorder'
-        )
+        audio_data = mic_recorder(start_prompt="🎙️ Speak", stop_prompt="🛑 Stop", just_once=True, key='recorder')
 
-    user_input = st.chat_input("Ask about Budget 2026 in English...")
+    user_input = st.chat_input("Ask about Budget 2026...")
 
     if audio_data and audio_data['bytes']:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as fp:
             fp.write(audio_data['bytes'])
             fp_name = fp.name
-        
         with st.spinner("Transcribing..."):
-            # Forced English with VAD filter to prevent garbage characters
-            segments, _ = whisper.transcribe(
-                fp_name, 
-                language="en", 
-                vad_filter=True,
-                initial_prompt="This is a query about the Indian Union Budget 2026."
-            )
+            segments, _ = whisper.transcribe(fp_name, language="en", vad_filter=True)
             final_query = " ".join(seg.text for seg in segments)
         os.remove(fp_name)
 
-    if user_input:
+    if user_input: 
         final_query = user_input
 
-    # 6. GENERATE RESPONSE WITH SMART FILTER & RERANKER
+# --- 7. GENERATE RESPONSE ---
 
-    if final_query:
-        with st.chat_message("user"):
-            st.markdown(final_query)
-        st.session_state.messages.append({"role": "user", "content": final_query})
+if final_query:
+    with st.chat_message("user"):
+        st.markdown(final_query)
+    st.session_state.messages.append({"role": "user", "content": final_query})
 
-        with st.spinner("Analyzing Budget Documents..."):
-            history_str = get_formatted_history()
-            doc_chain, retriever = get_rag_components()
+    with st.spinner("Processing..."):
+        history_str = get_formatted_history()
+        
+        # A. Classify Intent using LLM
+        intent = classify_intent(final_query)
+        st.toast(f"Detected Intent: {intent}", icon="🤖")
+
+        doc_chain, retriever = get_rag_components()
+        
+        if doc_chain:
+            # B. Initial Retrieval
+            initial_docs = retriever.invoke(final_query)
             
-            if doc_chain:
-                # STEP 1: Initial Retrieval (Recall Stage)
-                initial_docs = retriever.invoke(final_query)
-                
-                # --- SMART INTENT-AWARE FILTER ---
-                meta_keywords = ["contents", "index", "chapters", "overview", "summary", "topics", "outline", "list of"]
-                is_meta_query = any(word in final_query.lower() for word in meta_keywords)
-                
-                candidate_docs = []
-                for d in initial_docs:
-                    page_num = d.metadata.get("page", 0)
-                    content_upper = d.page_content.upper()
-                    
-                    if not is_meta_query:
-                        # Skip TOC/Index noise for specific factual questions
-                        if page_num < 4 or "CONTENTS" in content_upper or d.page_content.count("....") > 5:
-                            continue 
-                    candidate_docs.append(d)
+            # C. Smart Filtering based on LLM Intent
+            candidate_docs = []
+            for d in initial_docs:
+                page_num = d.metadata.get("page", 0)
+                # If factual, filter out TOC pages (0-3) and TOC dots
+                if intent == "FACTUAL":
+                    if page_num < 4 or d.page_content.count("....") > 5:
+                        continue 
+                candidate_docs.append(d)
 
-                if not candidate_docs:
-                    candidate_docs = initial_docs[:10]
+            if not candidate_docs: 
+                candidate_docs = initial_docs[:10]
 
-                # STEP 2: Reranking Stage (Precision Stage)
-                doc_texts = [d.page_content for d in candidate_docs]
-                
-                rerank_results = vo.rerank(
-                    query=final_query,
-                    documents=doc_texts,
-                    model="rerank-2.5",
-                    top_k=4 
-                )
-                
-                final_docs = [candidate_docs[r.index] for r in rerank_results.results]
-                
-                # STEP 3: LLM Generation
-                response = doc_chain.invoke({
-                    "input": final_query, 
-                    "chat_history": history_str,
-                    "context": final_docs
-                })
-                
-                # Support for different return types from LangChain
-                answer_text = response if isinstance(response, str) else str(response)
+            # D. Reranking
+            doc_texts = [d.page_content for d in candidate_docs]
+            rerank_results = vo.rerank(query=final_query, documents=doc_texts, model="rerank-2.5", top_k=4)
+            final_docs = [candidate_docs[r.index] for r in rerank_results.results]
+            
+            # E. Generation
+            response = doc_chain.invoke({"input": final_query, "chat_history": history_str, "context": final_docs})
+            answer_text = response if isinstance(response, str) else str(response)
 
-                st.session_state.memory.append((final_query, answer_text))
-                
-                # AUDIO GENERATION
-                spoken_text = clean_text_for_speech(answer_text)
-                audio_folder = r"C:\Users\junjo\Desktop\PRO\RAG\Budgest-AI\audio_responses"
-                os.makedirs(audio_folder, exist_ok=True)
-                
-                filename = f"response_{uuid.uuid4().hex}.mp3"
-                tts_path = os.path.join(audio_folder, filename)
-                
-                try:
-                    gTTS(text=spoken_text, lang='en').save(tts_path)
-                except: 
-                    tts_path = None
+            st.session_state.memory.append((final_query, answer_text))
+            
+            # F. Audio & UI
+            spoken_text = clean_text_for_speech(answer_text)
+            audio_folder = r"C:\Users\junjo\Desktop\PRO\RAG\Budgest-AI\audio_responses"
+            os.makedirs(audio_folder, exist_ok=True)
+            tts_path = os.path.join(audio_folder, f"response_{uuid.uuid4().hex}.mp3")
+            try:
+                gTTS(text=spoken_text, lang='en').save(tts_path)
+            except: tts_path = None
 
-                # Show Result in UI
-                with st.chat_message("assistant"):
-                    st.markdown(answer_text)
-                    if tts_path: st.audio(tts_path)
-                    
-                    with st.expander("📚 View Budget Source Chunks"):
-                        for i, doc in enumerate(final_docs):
-                            page_num = doc.metadata.get("page", "N/A")
-                            st.markdown(f"**Chunk {i+1} (Page {page_num + 1 if isinstance(page_num, int) else page_num}):**")
-                            st.caption(doc.page_content)
-                            st.divider()
-                
-                st.session_state.messages.append({
-                    "role": "assistant", 
-                    "content": answer_text, 
-                    "audio": tts_path, 
-                    "sources": final_docs
-                })
-                # Rerun to clear the text input and reset recorder
-                st.rerun()
+            with st.chat_message("assistant"):
+                st.markdown(answer_text)
+                if tts_path: st.audio(tts_path)
+                with st.expander("📚 View Sources"):
+                    for i, doc in enumerate(final_docs):
+                        st.markdown(f"**Chunk {i+1} (Page {doc.metadata.get('page', 0)+1}):**")
+                        st.caption(doc.page_content)
+                        st.divider()
+            
+            st.session_state.messages.append({"role": "assistant", "content": answer_text, "audio": tts_path, "sources": final_docs})
+            st.rerun()

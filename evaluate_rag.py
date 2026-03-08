@@ -20,14 +20,16 @@ from test_data import test_queries
 api_key = os.getenv("OPENAI_API_KEY")
 vo = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
 embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
-vectorstore = FAISS.load_local("budget_faiss", embeddings, allow_dangerous_deserialization=True)
+vectorstore = FAISS.load_local(
+    "budget_faiss", embeddings, allow_dangerous_deserialization=True
+)
 
 retriever = vectorstore.as_retriever(search_kwargs={"k": 20})
 
-# RAG LLM 
+# RAG LLM
 rag_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=0)
 
-# EVALUATOR LLM 
+# EVALUATOR LLM
 evaluator_llm = ChatOpenAI(model="gpt-4o-mini", api_key=api_key, temperature=1)
 
 prompt = ChatPromptTemplate.from_template(
@@ -41,23 +43,35 @@ print(f"Running RAG on {len(test_queries)} test queries...")
 
 for i, query in enumerate(test_queries):
     user_q = query["question"]
-    print(f"[{i+1}/{len(test_queries)}] Processing: {user_q[:50]}...")
+    print(f"[{i + 1}/{len(test_queries)}] Processing: {user_q[:50]}...")
 
     # A. Initial Retrieval (Recall Stage)
     initial_docs = retriever.invoke(user_q)
-    
-    # B. SMART FILTER 
-    meta_keywords = ["contents", "index", "chapters", "overview", "summary", "topics", "outline"]
+
+    # B. SMART FILTER
+    meta_keywords = [
+        "contents",
+        "index",
+        "chapters",
+        "overview",
+        "summary",
+        "topics",
+        "outline",
+    ]
     is_meta_query = any(word in user_q.lower() for word in meta_keywords)
-    
+
     candidate_docs = []
     for d in initial_docs:
         page_num = d.metadata.get("page", 0)
         content_upper = d.page_content.upper()
         if not is_meta_query:
             # Skip TOC noise (first 4 pages or high dot density)
-            if page_num < 4 or "CONTENTS" in content_upper or d.page_content.count("....") > 5:
-                continue 
+            if (
+                page_num < 4
+                or "CONTENTS" in content_upper
+                or d.page_content.count("....") > 5
+            ):
+                continue
         candidate_docs.append(d)
 
     if not candidate_docs:
@@ -66,27 +80,24 @@ for i, query in enumerate(test_queries):
     # C. Rerank (Precision Stage)
     doc_texts = [d.page_content for d in candidate_docs]
     rerank_results = vo.rerank(
-        query=user_q,
-        documents=doc_texts,
-        model="rerank-2.5",
-        top_k=4
+        query=user_q, documents=doc_texts, model="rerank-2.5", top_k=4
     )
     final_docs = [candidate_docs[r.index] for r in rerank_results.results]
-    
+
     # D. Generate Answer
-    response = document_chain.invoke({
-        "input": user_q, 
-        "chat_history": "", 
-        "context": final_docs
-    })
-    
+    response = document_chain.invoke(
+        {"input": user_q, "chat_history": "", "context": final_docs}
+    )
+
     # Rename keys to match Ragas expectations (user_input, response, retrieved_contexts, reference)
-    results.append({
-        "user_input": user_q,
-        "response": response,
-        "retrieved_contexts": [doc.page_content for doc in final_docs],
-        "reference": query["ground_truth"]
-    })
+    results.append(
+        {
+            "user_input": user_q,
+            "response": response,
+            "retrieved_contexts": [doc.page_content for doc in final_docs],
+            "reference": query["ground_truth"],
+        }
+    )
 
 # 3. PREPARE DATASET
 dataset = Dataset.from_list(results)
@@ -113,8 +124,18 @@ df = result.to_pandas()
 if not df.empty:
     print("\n--- RAG Evaluation Report ---")
     # Show the specific columns for clarity
-    print(df[['user_input', 'faithfulness', 'answer_relevancy', 'context_precision', 'context_recall']])
-    
+    print(
+        df[
+            [
+                "user_input",
+                "faithfulness",
+                "answer_relevancy",
+                "context_precision",
+                "context_recall",
+            ]
+        ]
+    )
+
     print("\n--- Final Average Scores ---")
     print(result)
 
